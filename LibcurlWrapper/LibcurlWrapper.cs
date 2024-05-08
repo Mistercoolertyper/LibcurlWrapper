@@ -2,6 +2,7 @@
 using LibcurlWrapper.Exceptions;
 using System.Reflection;
 using System.Text;
+using static LibcurlWrapper.LibcurlConstants;
 
 namespace LibcurlWrapper
 {
@@ -73,7 +74,24 @@ namespace LibcurlWrapper
 			return totalSize;
 		}
 
-		public LibcurlResponse? Post(string url, string? data = null, List<string>? headers = null, bool verbose = false)
+		private static LibcurlResponse GetResponse(IntPtr curlInst, StringBuilder responseBodyBuilder)
+		{
+			IntPtr statusCodePtr = Marshal.AllocHGlobal(sizeof(long));
+			curl_easy_getinfo(curlInst, CURLINFO.RESPONSE_CODE, statusCodePtr);
+
+			IntPtr httpVersionPtr = Marshal.AllocHGlobal(sizeof(long));
+			curl_easy_getinfo(curlInst, CURLINFO.HTTP_VERSION, httpVersionPtr);
+
+			var httpVersion = (CURL_HTTP_VERSION)Enum.Parse(typeof(CURL_HTTP_VERSION), ((int)Marshal.ReadInt64(statusCodePtr)).ToString());
+			var statusCode = (int)Marshal.ReadInt64(statusCodePtr);
+
+			Marshal.FreeHGlobal(statusCodePtr);
+			Marshal.FreeHGlobal(httpVersionPtr);
+
+			return new(responseBodyBuilder.ToString(), statusCode, httpVersion, null);
+		}
+
+		public LibcurlResponse Post(string url, string? data = null, List<string>? headers = null, bool verbose = false)
 		{
 			data ??= "";
 			IntPtr curlInst = curl_easy_init();
@@ -81,33 +99,25 @@ namespace LibcurlWrapper
 			StringBuilder responseBodyBuilder = new();
 
 			SetupRequest(curlInst, url, responseBodyBuilder, verbose);
-			curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.POSTFIELDS, Marshal.StringToHGlobalAnsi(data));
-			curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.POST, 1);
+			curl_easy_setopt(curlInst, CURLOPT.POSTFIELDS, Marshal.StringToHGlobalAnsi(data));
+			curl_easy_setopt(curlInst, CURLOPT.POST, 1);
 
 			if (headers != null)
 			{
-				curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.HTTPHEADER, CurlSlistArray([.. headers]));
+				curl_easy_setopt(curlInst, CURLOPT.HTTPHEADER, CurlSlistArray([.. headers]));
 			}
 
-			int response = curl_easy_perform(curlInst);
-			if (response != 0)
+			CURLCode response = (CURLCode)curl_easy_perform(curlInst);
+			if (response != CURLCode.CURLE_OK)
 			{
-				return null;
+				return new(null, null, null, curl_easy_stderr(response));
 			}
-
-			IntPtr statusCodePtr = Marshal.AllocHGlobal(sizeof(long));
-			curl_easy_getinfo(curlInst, LibcurlConstants.CURLINFO.RESPONSE_CODE, statusCodePtr);
-
-			IntPtr httpVersionPtr = Marshal.AllocHGlobal(sizeof(long));
-			curl_easy_getinfo(curlInst, LibcurlConstants.CURLINFO.HTTP_VERSION, httpVersionPtr);
-
-			var httpVersion = (LibcurlConstants.CURL_HTTP_VERSION)Enum.Parse(typeof(LibcurlConstants.CURL_HTTP_VERSION), ((int)Marshal.ReadInt64(statusCodePtr)).ToString());
 
 			curl_easy_cleanup(curlInst);
-			return new(responseBodyBuilder.ToString(), (int)Marshal.ReadInt64(statusCodePtr), httpVersion);
+			return GetResponse(curlInst, responseBodyBuilder);
 		}
 
-		public LibcurlResponse? Get(string url, List<string>? headers = null, bool verbose = false)
+		public LibcurlResponse Get(string url, List<string>? headers = null, bool verbose = false)
 		{
 			IntPtr curlInst = curl_easy_init();
 
@@ -117,25 +127,16 @@ namespace LibcurlWrapper
 
 			if (headers != null)
 			{
-				curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.HTTPHEADER, CurlSlistArray([..headers]));
+				curl_easy_setopt(curlInst, CURLOPT.HTTPHEADER, CurlSlistArray([..headers]));
 			}
 
-			int response = curl_easy_perform(curlInst);
-			if (response != 0)
+			CURLCode response = (CURLCode)curl_easy_perform(curlInst);
+			if (response != CURLCode.CURLE_OK)
 			{
-				return null;
+				return new(null, null, null, curl_easy_stderr(response));
 			}
 
-			IntPtr statusCodePtr = Marshal.AllocHGlobal(sizeof(long));
-			curl_easy_getinfo(curlInst, LibcurlConstants.CURLINFO.RESPONSE_CODE, statusCodePtr);
-
-			IntPtr httpVersionPtr = Marshal.AllocHGlobal(sizeof(long));
-			curl_easy_getinfo(curlInst, LibcurlConstants.CURLINFO.HTTP_VERSION, httpVersionPtr);
-
-			var httpVersion = (LibcurlConstants.CURL_HTTP_VERSION)Enum.Parse(typeof(LibcurlConstants.CURL_HTTP_VERSION), ((int)Marshal.ReadInt64(httpVersionPtr)).ToString());
-
-			curl_easy_cleanup(curlInst);
-			return new(responseBodyBuilder.ToString(), (int)Marshal.ReadInt64(statusCodePtr), httpVersion);
+			return GetResponse(curlInst, responseBodyBuilder);
 		}
 
 		private static IntPtr CurlSlistArray(string[] strings)
@@ -150,19 +151,19 @@ namespace LibcurlWrapper
 
 		private void SetupRequest(IntPtr curlInst, string url, StringBuilder responseData, bool verbose)
 		{
-			curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.URL, Marshal.StringToHGlobalAnsi(url));
+			curl_easy_setopt(curlInst, CURLOPT.URL, Marshal.StringToHGlobalAnsi(url));
 
 			if (verbose)
 			{
-				curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.VERBOSE, 1);
+				curl_easy_setopt(curlInst, CURLOPT.VERBOSE, 1);
 			}
 
-			curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.SSLVERSION, options.SSL_VERSION);
-			curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.HTTP_VERSION, options.HTTP_VERSION);
-			curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.CAINFO, Marshal.StringToHGlobalAnsi(".\\cert.crt"));
+			curl_easy_setopt(curlInst, CURLOPT.SSLVERSION, options.SSL_VERSION);
+			curl_easy_setopt(curlInst, CURLOPT.HTTP_VERSION, options.HTTP_VERSION);
+			curl_easy_setopt(curlInst, CURLOPT.CAINFO, Marshal.StringToHGlobalAnsi(".\\cert.crt"));
 
-			curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.WRITEFUNCTION, Marshal.GetFunctionPointerForDelegate(writeCallbackDelegate));
-			curl_easy_setopt(curlInst, LibcurlConstants.CURLOPT.WRITEDATA, GCHandle.ToIntPtr(GCHandle.Alloc(responseData)));
+			curl_easy_setopt(curlInst, CURLOPT.WRITEFUNCTION, Marshal.GetFunctionPointerForDelegate(writeCallbackDelegate));
+			curl_easy_setopt(curlInst, CURLOPT.WRITEDATA, GCHandle.ToIntPtr(GCHandle.Alloc(responseData)));
 		}
 
 		private static IntPtr curl_easy_init()
@@ -170,14 +171,9 @@ namespace LibcurlWrapper
 			return Consts.dll!.GetDelegateFromFuncName<curl_easy_init_delegate>("curl_easy_init")();
 		}
 
-		private static int curl_easy_setopt(IntPtr curl, int option, IntPtr parameter)
+		private static int curl_easy_setopt(IntPtr curl, CURLOPT option, IntPtr parameter)
 		{
 			return Consts.dll!.GetDelegateFromFuncName<curl_easy_setopt_delegate>("curl_easy_setopt")(curl, option, parameter);
-		}
-
-		private static int curl_easy_setopt(IntPtr curl, LibcurlConstants.CURLOPT option, IntPtr parameter)
-		{
-			return curl_easy_setopt(curl, (int)option, parameter);
 		}
 
 		private static int curl_easy_perform(IntPtr curl)
@@ -185,19 +181,21 @@ namespace LibcurlWrapper
 			return Consts.dll!.GetDelegateFromFuncName<curl_easy_perform_delegate>("curl_easy_perform")(curl);
 		}
 
+		private static string curl_easy_stderr(CURLCode errorCode)
+		{
+			IntPtr errorMessagePtr = Consts.dll!.GetDelegateFromFuncName<curl_easy_strerror_delegate>("curl_easy_strerror")(errorCode);
+			string errorMessage = Marshal.PtrToStringAnsi(errorMessagePtr)!;
+			return errorMessage;
+		}
+
 		private static void curl_easy_cleanup(IntPtr curl)
 		{
 			Consts.dll!.GetDelegateFromFuncName<curl_easy_cleanup_delegate>("curl_easy_cleanup")(curl);
 		}
 
-		private static int curl_easy_getinfo(IntPtr curl, int info, IntPtr param)
+		private static int curl_easy_getinfo(IntPtr curl, CURLINFO info, IntPtr param)
 		{
 			return Consts.dll!.GetDelegateFromFuncName<curl_easy_getinfo_delegate>("curl_easy_getinfo")(curl, info, param);
-		}
-
-		private static int curl_easy_getinfo(IntPtr curl, LibcurlConstants.CURLINFO info, IntPtr param)
-		{
-			return curl_easy_getinfo(curl, (int)info, param);
 		}
 
 		private static IntPtr curl_slist_append(IntPtr slist, string str)
@@ -209,7 +207,7 @@ namespace LibcurlWrapper
 		private delegate IntPtr curl_easy_init_delegate();
 
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		private delegate int curl_easy_setopt_delegate(IntPtr curl, int option, IntPtr parameter);
+		private delegate int curl_easy_setopt_delegate(IntPtr curl, CURLOPT option, IntPtr parameter);
 
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 		private delegate int curl_easy_perform_delegate(IntPtr curl);
@@ -218,9 +216,12 @@ namespace LibcurlWrapper
 		private delegate void curl_easy_cleanup_delegate(IntPtr curl);
 
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		private delegate int curl_easy_getinfo_delegate(IntPtr curl, int info, IntPtr param);
+		private delegate int curl_easy_getinfo_delegate(IntPtr curl, CURLINFO info, IntPtr param);
 
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 		private delegate IntPtr curl_slist_append_delegate(IntPtr slist, string str);
+
+		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+		private delegate IntPtr curl_easy_strerror_delegate(CURLCode errornum);
 	}
 }

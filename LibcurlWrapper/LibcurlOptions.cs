@@ -1,4 +1,6 @@
-﻿namespace LibcurlWrapper
+﻿using static LibcurlWrapper.LibcurlConstants;
+
+namespace LibcurlWrapper
 {
 	public class LibcurlOptions
 	{
@@ -7,11 +9,11 @@
 
 		public LibcurlOptions()
 		{
-			HTTP_VERSION = (int)LibcurlConstants.CURL_HTTP_VERSION.VERSION_3;
-			SSL_VERSION = (int)LibcurlConstants.CURL_TLS_VERSION.SSLVERSION_DEFAULT;
+			HTTP_VERSION = (int)CURL_HTTP_VERSION.VERSION_3;
+			SSL_VERSION = (int)CURL_TLS_VERSION.SSLVERSION_DEFAULT;
 		}
 
-		public LibcurlOptions(LibcurlConstants.CURL_HTTP_VERSION httpVersion, LibcurlConstants.CURL_TLS_VERSION sslVersion)
+		public LibcurlOptions(CURL_HTTP_VERSION httpVersion, CURL_TLS_VERSION sslVersion)
 		{
 			HTTP_VERSION = (int)httpVersion;
 			SSL_VERSION = (int)sslVersion;
