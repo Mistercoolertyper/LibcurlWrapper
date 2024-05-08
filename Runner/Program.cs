@@ -8,7 +8,7 @@ var curl = new Libcurl(new(
 	CURL_TLS_VERSION.SSLVERSION_TLSv1_3
 ));
 
-var getResponse = curl.Get("http://localhost/", [
+var getResponse = curl.Get("https://cloudflare-quic.com/", [
 	"SomeHeader: SomeValue"
 ]);
 
